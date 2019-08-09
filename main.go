@@ -140,7 +140,7 @@ func main() {
 		forward   string
 	)
 	flag.StringVar(&bind, "b", "127.0.0.1", "local bind IP")
-	flag.BoolVar(&hijackDNS, "h", false, "dns proxy on <bind>:53")
+	flag.BoolVar(&hijackDNS, "s", false, "dns proxy on <bind>:53")
 	flag.StringVar(&streamUrl, "r", "rtmp://server/app/?stream", "rtmp proxy on <bind>:1935")
 	flag.StringVar(&forward, "f", "", "tcp proxy on <bind>:8080")
 	flag.Parse()
@@ -148,7 +148,7 @@ func main() {
 	nifs, _ := net.InterfaceAddrs()
 	found := false
 	for _, nif := range nifs {
-		if nif.String() == bind {
+		if strings.HasPrefix(nif.String(), bind+"/") {
 			found = true
 			break
 		}
@@ -159,12 +159,15 @@ func main() {
 
 	if hijackDNS {
 		startDNSProxy(bind)
+		log.Printf("dnsproxy started")
 	}
 	if streamUrl != "" {
 		startRTMPProxy(bind, streamUrl)
+		log.Printf("rtmpproxy started")
 	}
 	if forward != "" {
 		startForwardProxy(bind, forward)
+		log.Printf("forwardproxy started")
 	}
 	wg.Wait()
 }
