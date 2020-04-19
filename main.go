@@ -96,6 +96,8 @@ func startDNSProxy(bind string) {
 	ips := []net.IP{bindIP}
 	hijackList := []string{
 		`^live-.*\.twitch\.tv$`,
+		`^allmight\.local$`,
+		`^p\.oi$`,
 	}
 	pc := &dnsproxy.ProxyConfig{}
 	for _, h := range hijackList {
