@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -45,6 +46,7 @@ func startRTMPProxy(bind string, pubUrl string) {
 				continue
 			}
 			go func(conn net.Conn) {
+				log.Printf("[rtmp] connect: %s", conn.RemoteAddr())
 				err := s.Serve(conn)
 				if err != nil {
 					log.Printf("[rtmp] serve: %v", err)
@@ -88,17 +90,12 @@ func startForwardProxy(bind string, dst string) {
 	}()
 }
 
-func startDNSProxy(bind string) {
+func startDNSProxy(bind string, hijackList []string) {
 	bindIP := net.ParseIP(bind).To4()
 	if len(bindIP) != net.IPv4len {
 		log.Fatalf("IPv4 only: %s", bind)
 	}
 	ips := []net.IP{bindIP}
-	hijackList := []string{
-		`^live-.*\.twitch\.tv$`,
-		`^allmight\.local$`,
-		`^p\.oi$`,
-	}
 	pc := &dnsproxy.ProxyConfig{}
 	for _, h := range hijackList {
 		re, err := regexp.Compile(h)
@@ -131,18 +128,28 @@ func startDNSProxy(bind string) {
 			log.Fatalf("[dnsproxy] serve udp: %v", err)
 		}
 	}()
+}
 
+func loadDNSList(filename string) []string {
+	data, _ := os.ReadFile(filename)
+	lines := strings.Split(string(data), "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimSpace(line)
+	}
+	return lines
 }
 
 func main() {
 	var (
 		bind      string
 		hijackDNS bool
+		dnsList   string
 		streamUrl string
 		forward   string
 	)
 	flag.StringVar(&bind, "b", "127.0.0.1", "local bind IP")
-	flag.BoolVar(&hijackDNS, "s", false, "dns proxy on <bind>:53")
+	flag.BoolVar(&hijackDNS, "d", false, "dns proxy on <bind>:53")
+	flag.StringVar(&dnsList, "dl", "", "dns list file")
 	flag.StringVar(&streamUrl, "r", "rtmp://server/app/?stream", "rtmp proxy on <bind>:1935")
 	flag.StringVar(&forward, "f", "", "tcp proxy on <bind>:8080")
 	flag.Parse()
@@ -160,7 +167,15 @@ func main() {
 	}
 
 	if hijackDNS {
-		startDNSProxy(bind)
+		hijackList := []string{
+			`^live-.*\.twitch\.tv$`,
+			`^.*\.contribute\.live-video\.net$`,
+			`^allmight\.local$`,
+		}
+		if dnsList != "" {
+			hijackList = loadDNSList(dnsList)
+		}
+		startDNSProxy(bind, hijackList)
 		log.Printf("dnsproxy started")
 	}
 	if streamUrl != "" {
